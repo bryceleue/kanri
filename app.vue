@@ -19,6 +19,8 @@ import {
   warn,
   error,
 } from "@tauri-apps/plugin-log";
+import { listen } from "@tauri-apps/api/event";
+import { useBoardsStore } from "@/stores/boards";
 
 onMounted(async () => {
   await attachConsole();
@@ -28,5 +30,12 @@ onMounted(async () => {
   console.info = info;
   console.warn = warn;
   console.error = error;
+
+  const boardsStore = useBoardsStore();
+
+  await listen("kanri-file-changed", async () => {
+    console.info("External file change detected, reloading boards...");
+    await boardsStore.forceReloadBoards();
+  });
 });
 </script>

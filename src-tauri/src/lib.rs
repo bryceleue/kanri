@@ -9,7 +9,10 @@
     windows_subsystem = "windows"
 )]
 
-use tauri::Manager;
+use notify::{EventKind, RecursiveMode, Watcher};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_window_state::StateFlags;
 
@@ -34,7 +37,6 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                // Avoid restoring an accidentally hidden window on startup.
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
                 .build(),
         )
@@ -55,6 +57,41 @@ pub fn run() {
                         let _ = window.set_focus();
                     }
                 }));
+
+            let app_handle = app.handle().clone();
+            let store_path = app
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app data dir")
+                .join(".kanri.dat");
+
+            std::thread::spawn(move || {
+                let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+                let mut watcher =
+                    notify::recommended_watcher(tx).expect("failed to create watcher");
+                watcher
+                    .watch(&store_path, RecursiveMode::NonRecursive)
+                    .expect("failed to watch store path");
+
+                let mut last_emit = Instant::now() - Duration::from_secs(10);
+
+                for res in rx {
+                    if let Ok(event) = res {
+                        if matches!(
+                            event.kind,
+                            EventKind::Modify(_) | EventKind::Create(_)
+                        ) {
+                            let now = Instant::now();
+                            // 5s cooldown: swallows the auto-save Kanri fires after a reload
+                            if now.duration_since(last_emit) > Duration::from_secs(5) {
+                                last_emit = now;
+                                app_handle.emit("kanri-file-changed", ()).ok();
+                            }
+                        }
+                    }
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())

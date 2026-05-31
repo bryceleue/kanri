@@ -23,6 +23,10 @@
     "fs:allow-write",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
+    {
+      "identifier": "fs:allow-watch",
+      "allow": [{ "path": "$APPDATA/tech.trobonox.kanri/.kanri.dat" }, { "path": "$APP/.kanri.dat" }, { "path": "$APP/**" }]
+    },
     "window-state:default",
     "opener:default",
     {

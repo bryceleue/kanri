@@ -26,6 +26,8 @@ import { generateUniqueID } from "@/utils/idGenerator";
 
 type Pin = { id: string; title: string; pinIcon?: string; pinIconText?: string };
 
+let _isReloading = false;
+
 export const useBoardsStore = defineStore("boards", {
   state: () => ({
     boards: [] as Board[],
@@ -49,7 +51,10 @@ export const useBoardsStore = defineStore("boards", {
     },
     async forceReloadBoards() {
       const tauri = useTauriStore().store;
+      await tauri.reload();
+      _isReloading = true;
       this.boards = (await tauri.get("boards")) || [];
+      setTimeout(() => { _isReloading = false; }, 1000);
     },
     async save() {
       const tauri = useTauriStore().store;
@@ -363,6 +368,7 @@ export const useBoardsStore = defineStore("boards", {
     _setupAutoSave() {
       let timeout: ReturnType<typeof setTimeout> | null = null;
       const schedule = () => {
+        if (_isReloading) return;
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => {
           console.log("Auto-saving boards...");
